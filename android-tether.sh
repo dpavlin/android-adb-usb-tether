@@ -3,7 +3,7 @@
 # as described at
 # http://www.forceclose.com/questions/2669/connect-android-to-internet-using-usb-tether-through-laptops-newtwork
 
-sudo id
+sudo -p "cache root credentials with sudo" id > /dev/null
 
 android=`adb shell ip addr list usb0 | grep 'inet ' | sed 's/^ *//g'`
 
