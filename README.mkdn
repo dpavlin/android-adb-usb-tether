@@ -1,0 +1,55 @@
+I don't have wifi connection at work, so I'm trying to use usb networking (as enabled by usb tethering option in Android 2.2 Froyo) to connect Android G1 to Internet.
+
+**Please note**: This is opposite of more usual example, where Android device is connected to internet, and laptop is using it as default route!
+
+On laptop, I'm using following script on laptop after enabling USB tether in `Settings` > `Wireless & Networks` > `Tethering` to setup default route on Android through laptop's network and provide NAT for it.
+
+
+    #!/bin/sh -x
+    
+    sudo id
+    
+    android=`adb shell ip addr list usb0 | grep 'inet ' | sed 's/^ *//g'`
+    
+    a_ip=`echo $android | cut -d" " -f2 | cut -d/ -f1`
+    c_ip=`echo $a_ip | cut -d. -f-3`.1
+    netmask=`echo $android | cut -d" " -f4`
+    
+    echo "Android $a_ip netmask $netmask -> $c_ip"
+    
+    sudo ifconfig usb0 $c_ip netmask $netmask up
+    sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
+    sudo iptables -t nat -A POSTROUTING -s $a_ip -o br0 -j MASQUERADE
+    
+    adb shell ip route add default via $c_ip
+    adb shell setprop net.dns1 8.8.8.8
+    
+    adb shell ping -c 1 $c_ip
+    ping -c 1 $a_ip
+
+This does work if tested with ping from `adb shell`, but Android still doesn't think it's connected to network and I'm getting "No network connection" error when using browser. However, network *does work* and after dismissing requestor I can use browser normally.
+
+However, gtalk, market and other application are more stubborn and don't have requestor I can dismiss :-)
+
+Using `adb logcat` I found following messages which might be relevant:
+
+
+    D/Tethering(  131): TetherModeAliveState.processMessage what=5
+    D/NetworkManagmentService(  131): rsp <213 5a:db:ed:8e:3f:93 0.0.0.0 0.0.0.0 [down broadcast multicast]>
+    D/NetworkManagmentService(  131): flags <[down broadcast multicast]>
+    D/NetworkManagmentService(  131): rsp <213 86:33:b6:3a:4f:27 0.0.0.0 0.0.0.0 [down broadcast multicast]>
+    D/NetworkManagmentService(  131): flags <[down broadcast multicast]>
+    D/NetworkManagmentService(  131): rsp <213 26:cc:57:4c:e0:3d 0.0.0.0 0.0.0.0 [down broadcast multicast]>
+    D/NetworkManagmentService(  131): flags <[down broadcast multicast]>
+    D/Tethering(  131): chooseUpstreamType(true),  dunRequired =false, iface=null
+    D/Tethering(  131): notifying tethered with iface =null
+    D/Tethering(  131): TetheredState.processMessage what=12
+    D/ConnectivityService(  131): startUsingNetworkFeature for net 0: enableHIPRI
+    D/ConnectivityService(  131): getMobileDataEnabled returning false
+    D/ConnectivityService(  131): requested special network with data disabled - rejected
+
+So, finally my quesstion is simple: how to I force `ConnectivityService` to return `true` for `getMobileDataEnabled` call ?
+
+I can see that Android x86 added [ethernet support for Android][1], but I'm hoping for simpler solution, maybe in form of some `setprop` ?
+
+  [1]: http://git.android-x86.org/?p=platform/frameworks/base.git;a=commit;h=73c8442658704e5749c5fc6fd6f93c15fcf1d7c6
